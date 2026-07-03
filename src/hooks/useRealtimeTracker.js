@@ -3,6 +3,11 @@ import { io } from "socket.io-client";
 
 const STALE_AFTER_MS = 25000;
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "/";
+const NEEDS_BACKEND_URL =
+  import.meta.env.PROD &&
+  !import.meta.env.VITE_SOCKET_URL &&
+  typeof window !== "undefined" &&
+  window.location.hostname.endsWith("vercel.app");
 const userColors = ["#39ff88", "#ff6b35", "#f8cf34", "#43d8ff", "#ff4fad", "#9d7cff"];
 
 function makeDisplayName(id, isSelf, name) {
@@ -27,11 +32,12 @@ function distanceInMeters(from, to) {
   return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export function useRealtimeTracker(profileName) {
+export function useRealtimeTracker(profileName, roomId) {
   const socketRef = useRef(null);
   const watchRef = useRef(null);
   const lastLocationRef = useRef(null);
   const profileNameRef = useRef(profileName);
+  const roomIdRef = useRef(roomId);
   const [socketStatus, setSocketStatus] = useState("connecting");
   const [locationStatus, setLocationStatus] = useState("locating");
   const [permissionError, setPermissionError] = useState("");
@@ -39,22 +45,33 @@ export function useRealtimeTracker(profileName) {
   const [users, setUsers] = useState({});
 
   const upsertUser = useCallback((payload, isSelf = false) => {
+    if (payload.roomId && payload.roomId !== roomIdRef.current) {
+      return;
+    }
+
     if (!payload?.id || !Number.isFinite(payload.latitude) || !Number.isFinite(payload.longitude)) {
       return;
     }
 
     setUsers((current) => {
       const existing = current[payload.id];
+      const withoutOldSelf =
+        isSelf && !existing
+          ? Object.fromEntries(
+              Object.entries(current).filter(([, user]) => !(user.isSelf && user.name === payload.name))
+            )
+          : current;
       const index = Object.keys(current).indexOf(payload.id);
       const color = existing?.color ?? userColors[Math.max(index, 0) % userColors.length];
 
       return {
-        ...current,
+        ...withoutOldSelf,
         [payload.id]: {
           id: payload.id,
           name: makeDisplayName(payload.id, isSelf, payload.name ?? existing?.name),
           latitude: payload.latitude,
           longitude: payload.longitude,
+          roomId: payload.roomId,
           accuracy: payload.accuracy,
           heading: payload.heading,
           speed: payload.speed,
@@ -69,14 +86,15 @@ export function useRealtimeTracker(profileName) {
 
   useEffect(() => {
     profileNameRef.current = profileName;
+    roomIdRef.current = roomId;
 
     const socket = socketRef.current;
     if (socket?.connected && lastLocationRef.current) {
-      const update = { ...lastLocationRef.current, name: profileName };
+      const update = { ...lastLocationRef.current, name: profileName, roomId };
       socket.emit("send-location", update);
       upsertUser({ id: socket.id, ...update }, true);
     }
-  }, [profileName, upsertUser]);
+  }, [profileName, roomId, upsertUser]);
 
   const startLocationWatch = useCallback(() => {
     if (!("geolocation" in navigator)) {
@@ -101,6 +119,7 @@ export function useRealtimeTracker(profileName) {
           heading: position.coords.heading,
           speed: position.coords.speed,
           name: profileNameRef.current,
+          roomId: roomIdRef.current,
         };
 
         lastLocationRef.current = location;
@@ -125,6 +144,11 @@ export function useRealtimeTracker(profileName) {
   }, [upsertUser]);
 
   const connect = useCallback(() => {
+    if (NEEDS_BACKEND_URL) {
+      setSocketStatus("backend missing");
+      return;
+    }
+
     if (socketRef.current) {
       socketRef.current.disconnect();
     }
@@ -143,7 +167,11 @@ export function useRealtimeTracker(profileName) {
       setSocketStatus("connected");
       setSelfId(socket.id);
       if (lastLocationRef.current) {
-        const update = { ...lastLocationRef.current, name: profileNameRef.current };
+        const update = {
+          ...lastLocationRef.current,
+          name: profileNameRef.current,
+          roomId: roomIdRef.current,
+        };
         socket.emit("send-location", update);
         upsertUser({ id: socket.id, ...update }, true);
       }

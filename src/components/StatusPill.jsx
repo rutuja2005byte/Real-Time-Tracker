@@ -4,6 +4,7 @@ const toneMap = {
   connecting: "border-amber-300/30 bg-amber-300/15 text-amber-100",
   reconnecting: "border-amber-300/30 bg-amber-300/15 text-amber-100",
   locating: "border-sky-300/30 bg-sky-300/15 text-sky-100",
+  "backend missing": "border-rose-400/30 bg-rose-400/15 text-rose-100",
   offline: "border-rose-400/30 bg-rose-400/15 text-rose-100",
   error: "border-rose-400/30 bg-rose-400/15 text-rose-100",
 };
