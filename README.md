@@ -1,33 +1,57 @@
 # Real-Time Tracker
 
-A real-time location tracking web application built using Node.js, Express, Socket.io, and Leaflet.js.
-This project allows multiple users to share and view live locations on an interactive map in real time.
+A real-time location tracking application built with Node.js, Express.js, Socket.IO, and Leaflet.js. It allows multiple users to share and view live locations on an interactive map.
+
+## Preview
+
+![Project Preview](./img.png)
 
 ## Features
 
-* Real-time location updates
-* Interactive map using Leaflet
-* Live communication with Socket.io
-* Multi-user tracking support
-* Responsive UI
+- Live location tracking
+- Real-time updates
+- Interactive map
+- Multi-user support
+- Responsive UI
 
 ## Tech Stack
 
-* Node.js
-* Express.js
-* Socket.io
-* Leaflet.js
-* HTML, CSS, JavaScript
+| Technology | |
+|------------|----------------|
+| Backend | Node.js, Express.js |
+| Real-Time | Socket.IO |
+| Maps | Leaflet.js |
+| Frontend | HTML, CSS, JavaScript |
 
-## Run Locally
+## Installation
 
-```bash id="7mq5ij"
+```bash
+git clone https://github.com/rutuja2005byte/Real-Time-Tracker.git
+cd Real-Time-Tracker
 npm install
-npm start
+node app.js
 ```
 
-Open in browser:
+Open:
 
-```bash id="b9n7s0"
+```
 http://localhost:3000
 ```
+
+## Project Structure
+
+```
+Real-Time-Tracker
+├── public/
+├── views/
+├── app.js
+├── package.json
+├── img.png
+└── README.md
+```
+
+## Author
+
+**Rutuja Darade**
+
+GitHub: https://github.com/rutuja2005byte
