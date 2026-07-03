@@ -20,7 +20,10 @@ function formatDistance(distance) {
 export function BottomPanel({ invitedUsers = [], users }) {
   const onlineCount = users.filter((user) => user.online).length;
   const pendingInvites = invitedUsers.filter((invite) => {
-    return !users.some((user) => user.name.toLowerCase() === invite.name.toLowerCase());
+    return !users.some((user) => {
+      if (invite.participantId && user.participantId === invite.participantId) return true;
+      return user.name.toLowerCase() === invite.name.toLowerCase();
+    });
   });
 
   return (

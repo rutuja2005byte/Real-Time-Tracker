@@ -32,12 +32,13 @@ function distanceInMeters(from, to) {
   return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export function useRealtimeTracker(profileName, roomId) {
+export function useRealtimeTracker(profileName, roomId, participantId) {
   const socketRef = useRef(null);
   const watchRef = useRef(null);
   const lastLocationRef = useRef(null);
   const profileNameRef = useRef(profileName);
   const roomIdRef = useRef(roomId);
+  const participantIdRef = useRef(participantId);
   const [socketStatus, setSocketStatus] = useState("connecting");
   const [locationStatus, setLocationStatus] = useState("locating");
   const [permissionError, setPermissionError] = useState("");
@@ -49,26 +50,31 @@ export function useRealtimeTracker(profileName, roomId) {
       return;
     }
 
-    if (!payload?.id || !Number.isFinite(payload.latitude) || !Number.isFinite(payload.longitude)) {
+    const identity = payload.participantId || payload.id;
+
+    if (!identity || !Number.isFinite(payload.latitude) || !Number.isFinite(payload.longitude)) {
       return;
     }
 
     setUsers((current) => {
-      const existing = current[payload.id];
-      const withoutOldSelf =
-        isSelf && !existing
-          ? Object.fromEntries(
-              Object.entries(current).filter(([, user]) => !(user.isSelf && user.name === payload.name))
-            )
-          : current;
-      const index = Object.keys(current).indexOf(payload.id);
+      const existing = current[identity];
+      const withoutSamePerson = Object.fromEntries(
+        Object.entries(current).filter(([id, user]) => {
+          if (id === identity) return false;
+          if (user.participantId && user.participantId === identity) return false;
+          return !(payload.name && user.name === payload.name && user.roomId === payload.roomId);
+        })
+      );
+      const index = Object.keys(withoutSamePerson).length;
       const color = existing?.color ?? userColors[Math.max(index, 0) % userColors.length];
 
       return {
-        ...withoutOldSelf,
-        [payload.id]: {
-          id: payload.id,
-          name: makeDisplayName(payload.id, isSelf, payload.name ?? existing?.name),
+        ...withoutSamePerson,
+        [identity]: {
+          id: identity,
+          socketId: payload.id,
+          participantId: identity,
+          name: makeDisplayName(identity, isSelf, payload.name ?? existing?.name),
           latitude: payload.latitude,
           longitude: payload.longitude,
           roomId: payload.roomId,
@@ -87,14 +93,15 @@ export function useRealtimeTracker(profileName, roomId) {
   useEffect(() => {
     profileNameRef.current = profileName;
     roomIdRef.current = roomId;
+    participantIdRef.current = participantId;
 
     const socket = socketRef.current;
     if (socket?.connected && lastLocationRef.current) {
-      const update = { ...lastLocationRef.current, name: profileName, roomId };
+      const update = { ...lastLocationRef.current, name: profileName, roomId, participantId };
       socket.emit("send-location", update);
       upsertUser({ id: socket.id, ...update }, true);
     }
-  }, [profileName, roomId, upsertUser]);
+  }, [profileName, roomId, participantId, upsertUser]);
 
   const startLocationWatch = useCallback(() => {
     if (!("geolocation" in navigator)) {
@@ -120,6 +127,7 @@ export function useRealtimeTracker(profileName, roomId) {
           speed: position.coords.speed,
           name: profileNameRef.current,
           roomId: roomIdRef.current,
+          participantId: participantIdRef.current,
         };
 
         lastLocationRef.current = location;
@@ -171,6 +179,7 @@ export function useRealtimeTracker(profileName, roomId) {
           ...lastLocationRef.current,
           name: profileNameRef.current,
           roomId: roomIdRef.current,
+          participantId: participantIdRef.current,
         };
         socket.emit("send-location", update);
         upsertUser({ id: socket.id, ...update }, true);
@@ -191,11 +200,13 @@ export function useRealtimeTracker(profileName, roomId) {
 
     socket.on("user-disconnected", (id) => {
       setUsers((current) => {
-        if (!current[id]) return current;
+        const entry = Object.entries(current).find(([, user]) => user.socketId === id);
+        if (!entry) return current;
+        const [userId, user] = entry;
         return {
           ...current,
-          [id]: {
-            ...current[id],
+          [userId]: {
+            ...user,
             online: false,
             lastUpdate: Date.now(),
           },
@@ -236,16 +247,16 @@ export function useRealtimeTracker(profileName, roomId) {
 
   const activeUsers = useMemo(() => {
     const values = Object.values(users);
-    const self = values.find((user) => user.id === selfId || user.isSelf);
+    const self = values.find((user) => user.participantId === participantId || user.isSelf);
 
     return values
       .map((user) => ({
         ...user,
         distanceFromMe:
-          user.id === self?.id ? 0 : distanceInMeters(self, user),
+          user.participantId === self?.participantId ? 0 : distanceInMeters(self, user),
       }))
-      .sort((a, b) => Number(b.isSelf) - Number(a.isSelf));
-  }, [selfId, users]);
+      .sort((a, b) => Number(b.isSelf) - Number(a.isSelf) || b.lastUpdate - a.lastUpdate);
+  }, [participantId, users]);
 
   return {
     activeUsers,

@@ -11,6 +11,10 @@ function createRoomId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
+function createParticipantId() {
+  return createRoomId();
+}
+
 function FloatingButton({ label, icon: Icon, onClick, tone = "default" }) {
   const tones = {
     default: "border-white/15 bg-zinc-950/70 text-white hover:bg-white/15",
@@ -30,10 +34,11 @@ function FloatingButton({ label, icon: Icon, onClick, tone = "default" }) {
   );
 }
 
-function createInviteLink(name, roomId) {
+function createInviteLink(name, roomId, participantId) {
   const url = new URL(window.location.href);
   url.searchParams.set("name", name.trim());
   url.searchParams.set("room", roomId);
+  url.searchParams.set("pid", participantId);
   return url.toString();
 }
 
@@ -51,6 +56,14 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     return params.get("name") || localStorage.getItem("tracker-profile-name") || "User";
   });
+  const [participantId] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const participantFromLink = params.get("pid");
+    const storedParticipant = localStorage.getItem("tracker-participant-id");
+    const nextParticipant = participantFromLink || storedParticipant || createParticipantId();
+    localStorage.setItem("tracker-participant-id", nextParticipant);
+    return nextParticipant;
+  });
   const [inviteName, setInviteName] = useState("");
   const [copied, setCopied] = useState(false);
   const [invitedUsers, setInvitedUsers] = useState(() => {
@@ -61,10 +74,15 @@ export default function App() {
     }
   });
   const { activeUsers, locationStatus, permissionError, reconnect, socketStatus } =
-    useRealtimeTracker(profileName.trim() || "User", roomId);
+    useRealtimeTracker(profileName.trim() || "User", roomId, participantId);
 
   const isLoading = activeUsers.length === 0 && locationStatus !== "error";
-  const inviteLink = inviteName.trim() ? createInviteLink(inviteName, roomId) : "";
+  const inviteParticipantId = inviteName.trim()
+    ? `invite-${roomId}-${inviteName.trim().toLowerCase().replace(/\s+/g, "-")}`
+    : "";
+  const inviteLink = inviteName.trim()
+    ? createInviteLink(inviteName, roomId, inviteParticipantId)
+    : "";
 
   useEffect(() => {
     localStorage.setItem("tracker-profile-name", profileName.trim() || "User");
@@ -78,12 +96,13 @@ export default function App() {
     const name = inviteName.trim();
     if (!name) return;
 
-    const link = createInviteLink(name, roomId);
+    const inviteId = `invite-${roomId}-${name.toLowerCase().replace(/\s+/g, "-")}`;
+    const link = createInviteLink(name, roomId, inviteId);
     setInvitedUsers((current) => {
-      if (current.some((user) => user.name.toLowerCase() === name.toLowerCase())) {
+      if (current.some((user) => user.participantId === inviteId)) {
         return current;
       }
-      return [...current, { name, invitedAt: Date.now() }];
+      return [...current, { name, participantId: inviteId, invitedAt: Date.now() }];
     });
 
     try {
