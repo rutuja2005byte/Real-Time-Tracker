@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import distance from "@turf/distance";
+import { point } from "@turf/helpers";
 import { io } from "socket.io-client";
 
 const STALE_AFTER_MS = 25000;
@@ -18,18 +20,18 @@ function makeDisplayName(id, isSelf, name) {
 function distanceInMeters(from, to) {
   if (!from || !to) return null;
 
-  const earthRadius = 6371000;
-  const toRadians = (value) => (value * Math.PI) / 180;
-  const deltaLat = toRadians(to.latitude - from.latitude);
-  const deltaLng = toRadians(to.longitude - from.longitude);
-  const startLat = toRadians(from.latitude);
-  const endLat = toRadians(to.latitude);
+  return (
+    distance(
+      point([from.longitude, from.latitude]),
+      point([to.longitude, to.latitude]),
+      { units: "kilometers" }
+    ) * 1000
+  );
+}
 
-  const a =
-    Math.sin(deltaLat / 2) ** 2 +
-    Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) ** 2;
-
-  return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+function accuracyRadius(user) {
+  if (!Number.isFinite(user?.accuracy)) return null;
+  return Math.max(0, user.accuracy);
 }
 
 export function useRealtimeTracker(profileName, roomId, participantId) {
@@ -254,6 +256,10 @@ export function useRealtimeTracker(profileName, roomId, participantId) {
         ...user,
         distanceFromMe:
           user.participantId === self?.participantId ? 0 : distanceInMeters(self, user),
+        distanceAccuracy:
+          user.participantId === self?.participantId
+            ? accuracyRadius(user)
+            : accuracyRadius(self) + accuracyRadius(user),
       }))
       .sort((a, b) => Number(b.isSelf) - Number(a.isSelf) || b.lastUpdate - a.lastUpdate);
   }, [participantId, users]);

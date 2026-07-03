@@ -17,6 +17,12 @@ function formatDistance(distance) {
   return `${(distance / 1000).toFixed(2)} km away`;
 }
 
+function formatAccuracy(accuracy) {
+  if (!Number.isFinite(accuracy)) return "";
+  if (accuracy < 1000) return `+/- ${Math.round(accuracy)} m`;
+  return `+/- ${(accuracy / 1000).toFixed(1)} km`;
+}
+
 export function BottomPanel({ invitedUsers = [], users }) {
   const onlineCount = users.filter((user) => user.online).length;
   const pendingInvites = invitedUsers.filter((invite) => {
@@ -71,6 +77,9 @@ export function BottomPanel({ invitedUsers = [], users }) {
                     <span className="inline-flex items-center gap-1">
                       <MapPin size={13} /> {user.isSelf ? "Your location" : formatDistance(user.distanceFromMe)}
                     </span>
+                    {formatAccuracy(user.distanceAccuracy) && (
+                      <span>{formatAccuracy(user.distanceAccuracy)}</span>
+                    )}
                     <span className="inline-flex items-center gap-1">
                       <Clock size={13} /> {relativeTime(user.lastUpdate)}
                     </span>
