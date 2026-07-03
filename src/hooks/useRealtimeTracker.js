@@ -37,17 +37,6 @@ export function useRealtimeTracker(profileName) {
   const [selfId, setSelfId] = useState("");
   const [users, setUsers] = useState({});
 
-  useEffect(() => {
-    profileNameRef.current = profileName;
-
-    const socket = socketRef.current;
-    if (socket?.connected && lastLocationRef.current) {
-      const update = { ...lastLocationRef.current, name: profileName };
-      socket.emit("send-location", update);
-      upsertUser({ id: socket.id, ...update }, true);
-    }
-  }, [profileName]);
-
   const upsertUser = useCallback((payload, isSelf = false) => {
     if (!payload?.id || !Number.isFinite(payload.latitude) || !Number.isFinite(payload.longitude)) {
       return;
@@ -76,6 +65,17 @@ export function useRealtimeTracker(profileName) {
       };
     });
   }, []);
+
+  useEffect(() => {
+    profileNameRef.current = profileName;
+
+    const socket = socketRef.current;
+    if (socket?.connected && lastLocationRef.current) {
+      const update = { ...lastLocationRef.current, name: profileName };
+      socket.emit("send-location", update);
+      upsertUser({ id: socket.id, ...update }, true);
+    }
+  }, [profileName, upsertUser]);
 
   const startLocationWatch = useCallback(() => {
     if (!("geolocation" in navigator)) {

@@ -1,6 +1,6 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Crosshair, LocateFixed, RefreshCw } from "lucide-react";
+import { Crosshair, LocateFixed, RefreshCw, UserRound } from "lucide-react";
 import { BottomPanel } from "./components/BottomPanel.jsx";
 import { StatusPill } from "./components/StatusPill.jsx";
 import { TrackingMap } from "./components/TrackingMap.jsx";
@@ -27,29 +27,41 @@ function FloatingButton({ label, icon: Icon, onClick, tone = "default" }) {
 
 export default function App() {
   const mapControlsRef = useRef(null);
+  const [profileName, setProfileName] = useState(() => {
+    return localStorage.getItem("tracker-profile-name") || "User";
+  });
   const { activeUsers, locationStatus, permissionError, reconnect, socketStatus } =
-    useRealtimeTracker();
+    useRealtimeTracker(profileName.trim() || "User");
 
   const isLoading = activeUsers.length === 0 && locationStatus !== "error";
+
+  useEffect(() => {
+    localStorage.setItem("tracker-profile-name", profileName.trim() || "User");
+  }, [profileName]);
 
   return (
     <main className="relative h-full min-h-full overflow-hidden bg-[#07090d] text-white">
       <TrackingMap ref={mapControlsRef} users={activeUsers} />
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-[500] h-48 bg-gradient-to-b from-black/75 via-black/30 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-[500] h-40 bg-gradient-to-b from-black/70 to-transparent" />
 
       <header className="absolute left-3 right-3 top-3 z-[600] flex flex-col gap-3 sm:left-5 sm:right-5 sm:top-5 sm:flex-row sm:items-start sm:justify-between">
         <motion.div
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
-          className="max-w-md rounded-[26px] border border-white/12 bg-zinc-950/55 px-4 py-3 shadow-2xl shadow-black/35 backdrop-blur-2xl"
+          className="w-full max-w-sm rounded-3xl border border-white/12 bg-black/70 p-4 shadow-2xl shadow-black/35 backdrop-blur-2xl"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200/80">
-            Realtime Tracker
-          </p>
-          <h1 className="mt-1 text-2xl font-black tracking-normal sm:text-3xl">
-            Live location map
-          </h1>
+          <h1 className="text-xl font-bold">Live Location</h1>
+          <label className="mt-3 flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-3 py-2">
+            <UserRound size={18} className="text-zinc-300" />
+            <input
+              value={profileName}
+              onChange={(event) => setProfileName(event.target.value)}
+              className="w-full bg-transparent text-sm font-medium text-white outline-none placeholder:text-zinc-500"
+              placeholder="Enter your name"
+              maxLength={32}
+            />
+          </label>
         </motion.div>
 
         <div className="flex flex-wrap gap-2 sm:justify-end">
@@ -58,7 +70,7 @@ export default function App() {
         </div>
       </header>
 
-      <div className="absolute right-3 top-40 z-[600] flex flex-col gap-3 sm:right-5 sm:top-36">
+      <div className="absolute right-3 top-44 z-[600] flex flex-col gap-3 sm:right-5 sm:top-32">
         <FloatingButton
           label="My Location"
           icon={LocateFixed}
@@ -81,9 +93,9 @@ export default function App() {
             exit={{ opacity: 0 }}
             className="absolute inset-0 z-[550] grid place-items-center bg-black/35 px-6 text-center backdrop-blur-[2px]"
           >
-            <div className="rounded-[28px] border border-white/12 bg-zinc-950/75 px-6 py-5 shadow-2xl backdrop-blur-2xl">
+            <div className="rounded-3xl border border-white/12 bg-black/75 px-6 py-5 shadow-2xl backdrop-blur-2xl">
               <div className="mx-auto mb-4 h-11 w-11 animate-spin rounded-full border-2 border-white/20 border-t-orange-400" />
-              <p className="text-lg font-bold">Finding your live location</p>
+              <p className="text-lg font-bold">Finding your location</p>
               <p className="mt-1 max-w-xs text-sm text-zinc-300">
                 Allow location access to start sharing updates with the map.
               </p>
