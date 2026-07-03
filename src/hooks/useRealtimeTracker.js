@@ -4,20 +4,49 @@ import { io } from "socket.io-client";
 const STALE_AFTER_MS = 25000;
 const userColors = ["#39ff88", "#ff6b35", "#f8cf34", "#43d8ff", "#ff4fad", "#9d7cff"];
 
-function makeDisplayName(id, isSelf) {
-  if (isSelf) return "You";
-  return `Rider ${id.slice(0, 4).toUpperCase()}`;
+function makeDisplayName(id, isSelf, name) {
+  if (isSelf) return name || "You";
+  return name || `User ${id.slice(0, 4).toUpperCase()}`;
 }
 
-export function useRealtimeTracker() {
+function distanceInMeters(from, to) {
+  if (!from || !to) return null;
+
+  const earthRadius = 6371000;
+  const toRadians = (value) => (value * Math.PI) / 180;
+  const deltaLat = toRadians(to.latitude - from.latitude);
+  const deltaLng = toRadians(to.longitude - from.longitude);
+  const startLat = toRadians(from.latitude);
+  const endLat = toRadians(to.latitude);
+
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) ** 2;
+
+  return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export function useRealtimeTracker(profileName) {
   const socketRef = useRef(null);
   const watchRef = useRef(null);
   const lastLocationRef = useRef(null);
+  const profileNameRef = useRef(profileName);
   const [socketStatus, setSocketStatus] = useState("connecting");
   const [locationStatus, setLocationStatus] = useState("locating");
   const [permissionError, setPermissionError] = useState("");
   const [selfId, setSelfId] = useState("");
   const [users, setUsers] = useState({});
+
+  useEffect(() => {
+    profileNameRef.current = profileName;
+
+    const socket = socketRef.current;
+    if (socket?.connected && lastLocationRef.current) {
+      const update = { ...lastLocationRef.current, name: profileName };
+      socket.emit("send-location", update);
+      upsertUser({ id: socket.id, ...update }, true);
+    }
+  }, [profileName]);
 
   const upsertUser = useCallback((payload, isSelf = false) => {
     if (!payload?.id || !Number.isFinite(payload.latitude) || !Number.isFinite(payload.longitude)) {
@@ -33,7 +62,7 @@ export function useRealtimeTracker() {
         ...current,
         [payload.id]: {
           id: payload.id,
-          name: existing?.name ?? makeDisplayName(payload.id, isSelf),
+          name: makeDisplayName(payload.id, isSelf, payload.name ?? existing?.name),
           latitude: payload.latitude,
           longitude: payload.longitude,
           accuracy: payload.accuracy,
@@ -70,6 +99,7 @@ export function useRealtimeTracker() {
           accuracy: position.coords.accuracy,
           heading: position.coords.heading,
           speed: position.coords.speed,
+          name: profileNameRef.current,
         };
 
         lastLocationRef.current = location;
@@ -112,8 +142,9 @@ export function useRealtimeTracker() {
       setSocketStatus("connected");
       setSelfId(socket.id);
       if (lastLocationRef.current) {
-        socket.emit("send-location", lastLocationRef.current);
-        upsertUser({ id: socket.id, ...lastLocationRef.current }, true);
+        const update = { ...lastLocationRef.current, name: profileNameRef.current };
+        socket.emit("send-location", update);
+        upsertUser({ id: socket.id, ...update }, true);
       }
     });
 
@@ -174,10 +205,18 @@ export function useRealtimeTracker() {
     connect();
   }, [connect]);
 
-  const activeUsers = useMemo(
-    () => Object.values(users).sort((a, b) => Number(b.isSelf) - Number(a.isSelf)),
-    [users]
-  );
+  const activeUsers = useMemo(() => {
+    const values = Object.values(users);
+    const self = values.find((user) => user.id === selfId || user.isSelf);
+
+    return values
+      .map((user) => ({
+        ...user,
+        distanceFromMe:
+          user.id === self?.id ? 0 : distanceInMeters(self, user),
+      }))
+      .sort((a, b) => Number(b.isSelf) - Number(a.isSelf));
+  }, [selfId, users]);
 
   return {
     activeUsers,
