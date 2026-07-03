@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Crosshair, LocateFixed, RefreshCw, UserRound } from "lucide-react";
+import { Check, Copy, Crosshair, Link, LocateFixed, RefreshCw, UserRound } from "lucide-react";
 import { BottomPanel } from "./components/BottomPanel.jsx";
 import { StatusPill } from "./components/StatusPill.jsx";
 import { TrackingMap } from "./components/TrackingMap.jsx";
@@ -25,19 +25,67 @@ function FloatingButton({ label, icon: Icon, onClick, tone = "default" }) {
   );
 }
 
+function createInviteLink(name) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("name", name.trim());
+  return url.toString();
+}
+
 export default function App() {
   const mapControlsRef = useRef(null);
   const [profileName, setProfileName] = useState(() => {
-    return localStorage.getItem("tracker-profile-name") || "User";
+    const params = new URLSearchParams(window.location.search);
+    return params.get("name") || localStorage.getItem("tracker-profile-name") || "User";
+  });
+  const [inviteName, setInviteName] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [invitedUsers, setInvitedUsers] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("tracker-invited-users") || "[]");
+    } catch {
+      return [];
+    }
   });
   const { activeUsers, locationStatus, permissionError, reconnect, socketStatus } =
     useRealtimeTracker(profileName.trim() || "User");
 
   const isLoading = activeUsers.length === 0 && locationStatus !== "error";
+  const inviteLink = inviteName.trim() ? createInviteLink(inviteName) : "";
 
   useEffect(() => {
     localStorage.setItem("tracker-profile-name", profileName.trim() || "User");
   }, [profileName]);
+
+  useEffect(() => {
+    localStorage.setItem("tracker-invited-users", JSON.stringify(invitedUsers));
+  }, [invitedUsers]);
+
+  const copyInvite = async () => {
+    const name = inviteName.trim();
+    if (!name) return;
+
+    const link = createInviteLink(name);
+    setInvitedUsers((current) => {
+      if (current.some((user) => user.name.toLowerCase() === name.toLowerCase())) {
+        return current;
+      }
+      return [...current, { name, invitedAt: Date.now() }];
+    });
+
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = link;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  };
 
   return (
     <main className="relative h-full min-h-full overflow-hidden bg-[#07090d] text-white">
@@ -62,6 +110,31 @@ export default function App() {
               maxLength={32}
             />
           </label>
+
+          <div className="mt-3 rounded-2xl border border-white/10 bg-white/10 p-3">
+            <label className="flex items-center gap-2">
+              <Link size={18} className="text-zinc-300" />
+              <input
+                value={inviteName}
+                onChange={(event) => setInviteName(event.target.value)}
+                className="w-full bg-transparent text-sm font-medium text-white outline-none placeholder:text-zinc-500"
+                placeholder="Name to invite"
+                maxLength={32}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={copyInvite}
+              disabled={!inviteName.trim()}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-bold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:bg-white/25 disabled:text-white/45"
+            >
+              {copied ? <Check size={17} /> : <Copy size={17} />}
+              {copied ? "Invite link copied" : "Copy invite link"}
+            </button>
+            {inviteLink && (
+              <p className="mt-2 truncate text-xs text-zinc-400">{inviteLink}</p>
+            )}
+          </div>
         </motion.div>
 
         <div className="flex flex-wrap gap-2 sm:justify-end">
@@ -117,7 +190,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <BottomPanel users={activeUsers} />
+      <BottomPanel invitedUsers={invitedUsers} users={activeUsers} />
     </main>
   );
 }

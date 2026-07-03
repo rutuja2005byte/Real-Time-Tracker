@@ -17,8 +17,11 @@ function formatDistance(distance) {
   return `${(distance / 1000).toFixed(2)} km away`;
 }
 
-export function BottomPanel({ users }) {
+export function BottomPanel({ invitedUsers = [], users }) {
   const onlineCount = users.filter((user) => user.online).length;
+  const pendingInvites = invitedUsers.filter((invite) => {
+    return !users.some((user) => user.name.toLowerCase() === invite.name.toLowerCase());
+  });
 
   return (
     <motion.section
@@ -38,39 +41,58 @@ export function BottomPanel({ users }) {
       </div>
 
       <div className="flex max-h-48 flex-col gap-2 overflow-y-auto">
-        {users.length === 0 ? (
+        {users.length === 0 && pendingInvites.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 p-4 text-sm text-zinc-300">
-            Waiting for users to share location.
+            Add a name and copy an invite link.
           </div>
         ) : (
-          users.map((user) => (
-            <motion.div
-              layout
-              key={user.id}
-              className="grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.08] p-3"
-            >
-              <span
-                className="h-10 w-10 rounded-full border-2 border-white/70 shadow-lg"
-                style={{ backgroundColor: user.online ? user.color : "#646b78" }}
-              />
-              <div className="min-w-0">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="truncate font-semibold">{user.name}</p>
-                  <span className="shrink-0 text-xs text-zinc-300">
-                    {user.isSelf ? "You" : user.online ? "Online" : "Offline"}
-                  </span>
+          <>
+            {users.map((user) => (
+              <motion.div
+                layout
+                key={user.id}
+                className="grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.08] p-3"
+              >
+                <span
+                  className="h-10 w-10 rounded-full border-2 border-white/70 shadow-lg"
+                  style={{ backgroundColor: user.online ? user.color : "#646b78" }}
+                />
+                <div className="min-w-0">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="truncate font-semibold">{user.name}</p>
+                    <span className="shrink-0 text-xs text-zinc-300">
+                      {user.isSelf ? "You" : user.online ? "Online" : "Offline"}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-300">
+                    <span className="inline-flex items-center gap-1">
+                      <MapPin size={13} /> {user.isSelf ? "Your location" : formatDistance(user.distanceFromMe)}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Clock size={13} /> {relativeTime(user.lastUpdate)}
+                    </span>
+                  </div>
                 </div>
-                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-300">
-                  <span className="inline-flex items-center gap-1">
-                    <MapPin size={13} /> {user.isSelf ? "Your location" : formatDistance(user.distanceFromMe)}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <Clock size={13} /> {relativeTime(user.lastUpdate)}
-                  </span>
+              </motion.div>
+            ))}
+
+            {pendingInvites.map((invite) => (
+              <motion.div
+                layout
+                key={invite.name}
+                className="grid grid-cols-[auto_1fr] items-center gap-3 rounded-2xl border border-dashed border-white/10 bg-white/[0.04] p-3"
+              >
+                <span className="h-10 w-10 rounded-full border-2 border-white/30 bg-zinc-700" />
+                <div className="min-w-0">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="truncate font-semibold text-zinc-200">{invite.name}</p>
+                    <span className="shrink-0 text-xs text-zinc-400">Invite sent</span>
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-400">Waiting for location permission</p>
                 </div>
-              </div>
-            </motion.div>
-          ))
+              </motion.div>
+            ))}
+          </>
         )}
       </div>
     </motion.section>

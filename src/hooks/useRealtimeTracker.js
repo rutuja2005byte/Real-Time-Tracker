@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io } from "socket.io-client";
 
 const STALE_AFTER_MS = 25000;
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "/";
 const userColors = ["#39ff88", "#ff6b35", "#f8cf34", "#43d8ff", "#ff4fad", "#9d7cff"];
 
 function makeDisplayName(id, isSelf, name) {
@@ -129,7 +130,7 @@ export function useRealtimeTracker(profileName) {
     }
 
     setSocketStatus("connecting");
-    const socket = io("/", {
+    const socket = io(SOCKET_URL, {
       transports: ["websocket", "polling"],
       reconnectionAttempts: Infinity,
       reconnectionDelay: 700,
