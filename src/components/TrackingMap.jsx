@@ -2,6 +2,8 @@ import { useEffect, useImperativeHandle, useRef, forwardRef } from "react";
 import L from "leaflet";
 
 const DEFAULT_CENTER = [19.076, 72.8777];
+const OSM_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 function makeIcon(color) {
   return L.divIcon({
@@ -18,6 +20,10 @@ function makeIcon(color) {
 }
 
 function animateMarker(marker, nextLatLng) {
+  if (marker.animationFrame) {
+    cancelAnimationFrame(marker.animationFrame);
+  }
+
   const start = marker.getLatLng();
   const end = L.latLng(nextLatLng);
   const startedAt = performance.now();
@@ -30,10 +36,12 @@ function animateMarker(marker, nextLatLng) {
     const lng = start.lng + (end.lng - start.lng) * eased;
     marker.setLatLng([lat, lng]);
 
-    if (progress < 1) requestAnimationFrame(frame);
+    if (progress < 1) {
+      marker.animationFrame = requestAnimationFrame(frame);
+    }
   }
 
-  requestAnimationFrame(frame);
+  marker.animationFrame = requestAnimationFrame(frame);
 }
 
 export const TrackingMap = forwardRef(function TrackingMap({ users }, ref) {
@@ -76,9 +84,15 @@ export const TrackingMap = forwardRef(function TrackingMap({ users }, ref) {
       preferCanvas: true,
       center: DEFAULT_CENTER,
       zoom: 13,
+      minZoom: 3,
+      maxZoom: 19,
+      worldCopyJump: true,
     });
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    L.tileLayer(OSM_TILE_URL, {
+      attribution: OSM_ATTRIBUTION,
+      detectRetina: true,
+      crossOrigin: true,
       maxZoom: 19,
     }).addTo(map);
 
