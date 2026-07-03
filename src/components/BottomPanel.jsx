@@ -17,6 +17,15 @@ function formatDistance(distance) {
   return `${(distance / 1000).toFixed(2)} km away`;
 }
 
+function distanceLabel(user) {
+  if (user.isSelf) return "Your location";
+  if (Number.isFinite(user.roadDistanceFromMe?.meters)) {
+    return `${formatDistance(user.roadDistanceFromMe.meters)} by road`;
+  }
+  if (user.roadDistanceFromMe?.loading) return "Calculating road distance";
+  return `${formatDistance(user.distanceFromMe)} straight line`;
+}
+
 function formatAccuracy(accuracy) {
   if (!Number.isFinite(accuracy)) return "";
   if (accuracy < 1000) return `+/- ${Math.round(accuracy)} m`;
@@ -75,7 +84,7 @@ export function BottomPanel({ invitedUsers = [], users }) {
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-300">
                     <span className="inline-flex items-center gap-1">
-                      <MapPin size={13} /> {user.isSelf ? "Your location" : formatDistance(user.distanceFromMe)}
+                      <MapPin size={13} /> {distanceLabel(user)}
                     </span>
                     {formatAccuracy(user.distanceAccuracy) && (
                       <span>{formatAccuracy(user.distanceAccuracy)}</span>

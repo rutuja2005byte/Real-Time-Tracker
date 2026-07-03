@@ -5,6 +5,7 @@ import { io } from "socket.io-client";
 
 const STALE_AFTER_MS = 25000;
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "/";
+const ROUTING_URL = import.meta.env.VITE_ROUTING_URL || "https://router.project-osrm.org";
 const NEEDS_BACKEND_URL =
   import.meta.env.PROD &&
   !import.meta.env.VITE_SOCKET_URL &&
@@ -34,6 +35,39 @@ function accuracyRadius(user) {
   return Math.max(0, user.accuracy);
 }
 
+function combinedAccuracy(from, to) {
+  const fromAccuracy = accuracyRadius(from);
+  const toAccuracy = accuracyRadius(to);
+  if (!Number.isFinite(fromAccuracy) || !Number.isFinite(toAccuracy)) return null;
+  return fromAccuracy + toAccuracy;
+}
+
+function routeCacheKey(from, to) {
+  const round = (value) => Number(value).toFixed(4);
+  return [
+    round(from.longitude),
+    round(from.latitude),
+    round(to.longitude),
+    round(to.latitude),
+  ].join(",");
+}
+
+async function getRoadDistanceInMeters(from, to, signal) {
+  const coords = `${from.longitude},${from.latitude};${to.longitude},${to.latitude}`;
+  const response = await fetch(
+    `${ROUTING_URL}/route/v1/driving/${coords}?overview=false&alternatives=false&steps=false`,
+    { signal }
+  );
+
+  if (!response.ok) {
+    throw new Error("Unable to load road distance");
+  }
+
+  const data = await response.json();
+  const meters = data?.routes?.[0]?.distance;
+  return Number.isFinite(meters) ? meters : null;
+}
+
 export function useRealtimeTracker(profileName, roomId, participantId) {
   const socketRef = useRef(null);
   const watchRef = useRef(null);
@@ -46,6 +80,8 @@ export function useRealtimeTracker(profileName, roomId, participantId) {
   const [permissionError, setPermissionError] = useState("");
   const [selfId, setSelfId] = useState("");
   const [users, setUsers] = useState({});
+  const [roadDistances, setRoadDistances] = useState({});
+  const routeKeysRef = useRef({});
 
   const upsertUser = useCallback((payload, isSelf = false) => {
     if (payload.roomId && payload.roomId !== roomIdRef.current) {
@@ -256,12 +292,64 @@ export function useRealtimeTracker(profileName, roomId, participantId) {
         ...user,
         distanceFromMe:
           user.participantId === self?.participantId ? 0 : distanceInMeters(self, user),
+        roadDistanceFromMe:
+          user.participantId === self?.participantId ? 0 : roadDistances[user.participantId],
         distanceAccuracy:
           user.participantId === self?.participantId
             ? accuracyRadius(user)
-            : accuracyRadius(self) + accuracyRadius(user),
+            : combinedAccuracy(self, user),
       }))
       .sort((a, b) => Number(b.isSelf) - Number(a.isSelf) || b.lastUpdate - a.lastUpdate);
+  }, [participantId, roadDistances, users]);
+
+  useEffect(() => {
+    const values = Object.values(users);
+    const self = values.find((user) => user.participantId === participantId || user.isSelf);
+    if (!self) return undefined;
+
+    const onlineUsers = values.filter((user) => !user.isSelf && user.online);
+
+    onlineUsers.forEach((user) => {
+      const cacheKey = routeCacheKey(self, user);
+      if (routeKeysRef.current[user.participantId] === cacheKey) return;
+      routeKeysRef.current[user.participantId] = cacheKey;
+
+      setRoadDistances((current) => ({
+        ...current,
+        [user.participantId]: {
+          ...current[user.participantId],
+          cacheKey,
+          loading: true,
+        },
+      }));
+
+      getRoadDistanceInMeters(self, user)
+        .then((meters) => {
+          if (routeKeysRef.current[user.participantId] !== cacheKey) return;
+          if (!Number.isFinite(meters)) return;
+          setRoadDistances((current) => ({
+            ...current,
+            [user.participantId]: {
+              cacheKey,
+              meters,
+              loading: false,
+              updatedAt: Date.now(),
+            },
+          }));
+        })
+        .catch((error) => {
+          if (routeKeysRef.current[user.participantId] !== cacheKey) return;
+          setRoadDistances((current) => ({
+            ...current,
+            [user.participantId]: {
+              ...current[user.participantId],
+              cacheKey,
+              loading: false,
+              error: true,
+            },
+          }));
+        });
+    });
   }, [participantId, users]);
 
   return {
